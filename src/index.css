@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  /* Stop horizontal trackpad swipes from triggering Safari's back/forward
+     navigation gesture while panning the chart. */
+  overscroll-behavior-x: none;
+}
+body {
+  background: #0e1116;
+  color: #e6edf3;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer components {
+  .btn {
+    @apply rounded-md border border-line bg-panel2 px-3 py-1.5 text-[13px] text-ink transition-colors;
+  }
+  .btn:hover {
+    @apply border-accent;
+  }
+  .btn:disabled {
+    @apply opacity-40 cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply bg-accent border-accent text-white;
+  }
+  .btn-active {
+    @apply bg-accent border-accent text-white;
+  }
+  .fld {
+    @apply inline-flex items-center gap-1.5 text-xs text-muted;
+  }
+  .num {
+    @apply w-16 rounded-md border border-line bg-bg px-2 py-1 text-[13px] text-ink;
+  }
+  .sel {
+    @apply rounded-md border border-line bg-bg px-2 py-1 text-xs text-ink;
+  }
+  .kbd {
+    @apply rounded border border-line border-b-2 bg-panel2 px-1.5 py-0.5 text-[11px] text-ink;
+  }
+  .stat-k {
+    @apply text-[10.5px] uppercase tracking-wider text-muted;
+  }
+  .stat-v {
+    @apply text-[15px] font-semibold;
+  }
+  .pill {
+    @apply rounded-full px-2.5 py-0.5 text-[13px] font-bold;
+  }
+}
