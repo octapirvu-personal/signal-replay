@@ -567,9 +567,9 @@ function TradeView(props: {
   const dragging = editLevel != null;
   // Dots are hidden until you interact — tap/select (touch) or hover (desktop).
   const showHandles = !preview && (hovered || selected || dragging);
-  // Info chips: always visible on touch, on hover/selection on desktop, and they
-  // stay up while adjusting (the text no longer overlaps the dots).
-  const showInfo = preview || touch || hovered || selected || dragging;
+  // Info chips show only while the position is selected/being adjusted (or
+  // hovered on desktop) — not sitting there all the time.
+  const showInfo = preview || hovered || selected || dragging;
 
   // The level being dragged → its y, price, and colour (for the line + axis tag).
   const levelY = editLevel === "sl" ? ysl : editLevel === "tp" ? ytp : editLevel === "entry" ? ye : null;
