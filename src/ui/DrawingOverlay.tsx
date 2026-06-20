@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import type { Logical } from "lightweight-charts";
+import type { Logical, MouseEventParams } from "lightweight-charts";
 import { getEngine } from "../chart/engineRef";
 import { useApp } from "../state/app";
 import { useSettings } from "../state/settings";
@@ -8,7 +8,7 @@ import { useDrawings } from "../state/drawings";
 import { evaluateTrade, type Trade, type TradeDirection } from "../backtest/trades";
 import { pipSizeFor } from "../backtest/journal";
 import { formatTime } from "../data/time";
-import type { Anchor, Trendline } from "../drawings/types";
+import type { Anchor, Trendline, Selection } from "../drawings/types";
 import { LONG_COLOR, SHORT_COLOR, DEFAULT_LINE_COLOR } from "../drawings/types";
 import { makeTradeId, makeTrendlineId, tradeContext } from "../app/drawingControls";
 import { useIsTouch } from "./useIsMobile";
@@ -64,6 +64,9 @@ export function DrawingOverlay() {
   const downClient = useRef<{ x: number; y: number } | null>(null);
   const movedRef = useRef(false);
   const dragRef = useRef<DragState>(null);
+  // Hit-test the current drawings at a pixel point — kept in a ref so the
+  // (stable) chart-click handler always sees fresh coordinates.
+  const hitTestRef = useRef<(x: number, y: number) => Selection>(() => null);
   // While an entry/SL/TP handle is held, draw a full-width dotted level line
   // (like the crosshair) plus a live price tag on the Y axis.
   const [editLevel, setEditLevel] = useState<{ id: string; part: "sl" | "tp" | "entry" } | null>(null);
@@ -103,9 +106,16 @@ export function DrawingOverlay() {
     // selection — TradingView-style — so the handles/toolbar disappear. Clicks
     // that land on a drawing are swallowed by the overlay and never reach the
     // chart, so this only fires for true background clicks.
-    const onChartClick = () => {
+    const onChartClick = (param: MouseEventParams) => {
       const d = useDrawings.getState();
-      if (d.tool === "cursor" && d.selection) d.select(null);
+      if (d.tool !== "cursor") return;
+      // A tap that reaches the chart means it didn't land on an interactive
+      // (selected) drawing. Hit-test the tapped point: select a drawing under
+      // it, otherwise clear the selection.
+      const pt = param.point;
+      const hit = pt ? hitTestRef.current(pt.x, pt.y) : null;
+      if (hit) d.select(hit);
+      else if (d.selection) d.select(null);
     };
     chart.subscribeClick(onChartClick);
     const ro = new ResizeObserver(syncBump);
@@ -140,6 +150,41 @@ export function DrawingOverlay() {
     return ts.logicalToCoordinate(i as Logical);
   };
   const yOfPrice = (p: number): number | null => series.priceToCoordinate(p);
+
+  // Right edge of a trade box: ends at the SL/TP exit candle, else extends to
+  // the current frontier (shared by the renderer and the tap hit-test).
+  const xRightOf = (t: Trade, xe: number): number => {
+    const exitIdx = tradeExitIdx.get(t.id) ?? null;
+    const endIdx = exitIdx != null ? exitIdx : frontier >= 0 ? frontier : null;
+    const xEnd = endIdx != null ? xOfTime(bars[endIdx]?.time ?? NaN) : null;
+    return xEnd != null ? Math.max(xEnd, xe) : xe + FWD_PX;
+  };
+
+  // Which drawing (if any) sits under a pixel point — used to tap-select.
+  hitTestRef.current = (x: number, y: number): Selection => {
+    for (let i = trades.length - 1; i >= 0; i--) {
+      const t = trades[i];
+      const xe = xOfTime(t.entryTime);
+      const ytp = yOfPrice(t.tp);
+      const ysl = yOfPrice(t.sl);
+      if (xe == null || ytp == null || ysl == null) continue;
+      const xr = xRightOf(t, xe);
+      const pad = 10;
+      if (x >= xe - pad && x <= xr + pad && y >= Math.min(ytp, ysl) - pad && y <= Math.max(ytp, ysl) + pad) {
+        return { kind: "trade", id: t.id };
+      }
+    }
+    for (let i = trendlines.length - 1; i >= 0; i--) {
+      const tl = trendlines[i];
+      const xa = xOfTime(tl.a.time);
+      const ya = yOfPrice(tl.a.price);
+      const xb = xOfTime(tl.b.time);
+      const yb = yOfPrice(tl.b.price);
+      if (xa == null || ya == null || xb == null || yb == null) continue;
+      if (distToSegment(x, y, xa, ya, xb, yb) <= 10) return { kind: "trendline", id: tl.id };
+    }
+    return null;
+  };
 
   const snapPrice = (idx: number, price: number): number => {
     if (!magnet || !bars[idx]) return price;
@@ -331,6 +376,7 @@ export function DrawingOverlay() {
           xb={xOfTime(tl.b.time)}
           yb={yOfPrice(tl.b.price)}
           selected={selection?.kind === "trendline" && selection.id === tl.id}
+          touch={touch}
           onSelectBody={(e) => {
             if (tool !== "cursor") return;
             select({ kind: "trendline", id: tl.id });
@@ -365,13 +411,7 @@ export function DrawingOverlay() {
           xe={xOfTime(t.entryTime)}
           xRight={(() => {
             const xe = xOfTime(t.entryTime);
-            if (xe == null) return null;
-            // End the box at the SL/TP exit candle; while still open, extend it
-            // to the current (frontier) candle instead of a fixed-width stub.
-            const exitIdx = tradeExitIdx.get(t.id) ?? null;
-            const endIdx = exitIdx != null ? exitIdx : frontier >= 0 ? frontier : null;
-            const xEnd = endIdx != null ? xOfTime(bars[endIdx]?.time ?? NaN) : null;
-            return xEnd != null ? Math.max(xEnd, xe) : xe + FWD_PX;
+            return xe == null ? null : xRightOf(t, xe);
           })()}
           ye={yOfPrice(t.entryPrice)}
           ysl={yOfPrice(t.sl)}
@@ -493,16 +533,18 @@ function TrendlineView(props: {
   xb: number | null;
   yb: number | null;
   selected: boolean;
+  touch: boolean;
   onSelectBody: (e: React.PointerEvent) => void;
   onHandle: (part: "a" | "b", e: React.PointerEvent) => void;
 }) {
-  const { tl, xa, ya, xb, yb, selected } = props;
+  const { tl, xa, ya, xb, yb, selected, touch } = props;
   if (xa == null || ya == null || xb == null || yb == null) return null;
   const proj = projectLine(xa, ya, xb, yb, tl.extend);
+  const grabbable = !(touch && !selected); // touch: pannable until selected
   return (
     <g>
       {/* hit area follows the actual a–b segment */}
-      <line x1={xa} y1={ya} x2={xb} y2={yb} stroke="transparent" strokeWidth={12} style={{ pointerEvents: "stroke", cursor: "move" }} onPointerDown={props.onSelectBody} />
+      <line x1={xa} y1={ya} x2={xb} y2={yb} stroke="transparent" strokeWidth={12} style={{ pointerEvents: grabbable ? "stroke" : "none", cursor: "move", touchAction: "none" }} onPointerDown={props.onSelectBody} />
       {/* visible line (projected if extend is set) */}
       <line x1={proj.x1} y1={proj.y1} x2={proj.x2} y2={proj.y2} stroke={tl.color} strokeWidth={selected ? tl.width + 1 : tl.width} strokeDasharray={DASH[tl.style]} style={{ pointerEvents: "none" }} />
       {selected &&
@@ -514,6 +556,15 @@ function TrendlineView(props: {
         ))}
     </g>
   );
+}
+
+/** Shortest distance from point (px,py) to the segment (ax,ay)-(bx,by). */
+function distToSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
 }
 
 /** Project a segment beyond its endpoints along its slope (TradingView "extend"). */
@@ -607,11 +658,14 @@ function TradeView(props: {
       <rect x={xe} y={Math.min(ye, ytp)} width={w} height={Math.abs(ye - ytp)} fill={LONG_COLOR} opacity={0.13} style={{ pointerEvents: "none" }} />
       <rect x={xe} y={Math.min(ye, ysl)} width={w} height={Math.abs(ye - ysl)} fill={SHORT_COLOR} opacity={0.13} style={{ pointerEvents: "none" }} />
 
-      {/* body: hover + tap-to-select + move target. Padded on touch so a small
-          box is still easy to tap with a finger. */}
+      {/* body move target. On touch an UNSELECTED position is pass-through, so a
+          finger landing on it pans/zooms the chart instead of grabbing it — you
+          tap to select first (handled via the chart hit-test), then it's
+          draggable. Padded on touch so a small box is easy to grab. */}
       {!preview &&
         (() => {
           const pad = touch ? 16 : 0;
+          const grabbable = !(touch && !selected); // touch: only when selected
           return (
             <rect
               x={xe - pad}
@@ -619,7 +673,7 @@ function TradeView(props: {
               width={w + pad * 2}
               height={Math.abs(ytp - ysl) + pad * 2}
               fill="transparent"
-              style={{ pointerEvents: "all", cursor: "move", touchAction: "none" }}
+              style={{ pointerEvents: grabbable ? "all" : "none", cursor: "move", touchAction: "none" }}
               onPointerDown={props.onSelectBody}
             />
           );
