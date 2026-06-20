@@ -11,7 +11,7 @@ const label = (name: string) => name.replace(/\.(csv|txt)$/i, "");
  * switch between symbols; each carries its own decisions, drawings, trades, and
  * journal. Refreshes whenever the active dataset changes (e.g. a new upload).
  */
-export function DatasetSwitcher() {
+export function DatasetSwitcher({ compact = false }: { compact?: boolean }) {
   const datasetId = useApp((s) => s.datasetId);
   const datasetName = useApp((s) => s.datasetName);
   const [list, setList] = useState<StoredDataset[]>([]);
@@ -51,6 +51,27 @@ export function DatasetSwitcher() {
     else useApp.getState().reset();
     setBusy(false);
   };
+
+  // Compact (mobile bottom bar): a narrow select that clips the name to ~6
+  // chars; tapping opens the native picker showing the full names.
+  if (compact) {
+    return (
+      <select
+        className="sel w-[88px] truncate"
+        disabled={busy}
+        value={datasetId ?? ""}
+        onChange={(e) => void onSwitch(e.target.value)}
+        title="Switch symbol"
+      >
+        {!datasetId && <option value="">—</option>}
+        {options.map((d) => (
+          <option key={d.id} value={d.id}>
+            {label(d.name)}
+          </option>
+        ))}
+      </select>
+    );
+  }
 
   return (
     <label className="fld">

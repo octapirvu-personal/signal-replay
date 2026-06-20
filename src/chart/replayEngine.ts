@@ -12,6 +12,7 @@ import {
   type Time,
   type UTCTimestamp,
   type LogicalRange,
+  type Logical,
 } from "lightweight-charts";
 import type { Bar } from "../data/types";
 import { detectPricePrecision, minMoveFor } from "../data/precision";
@@ -427,8 +428,8 @@ export class ReplayEngine {
     return this.frontier;
   }
 
-  // ---------- faster two-finger pinch zoom (TradingView-like) ----------
-  private pinchStart: { dist: number; bs: number } | null = null;
+  // ---------- faster two-finger pinch zoom, anchored at the finger midpoint ----------
+  private pinchStart: { dist: number; bs: number; midX: number; logical: Logical } | null = null;
 
   private setupPinch() {
     this.container.addEventListener("touchstart", this.onTouchStart, { passive: true });
@@ -443,20 +444,32 @@ export class ReplayEngine {
     this.container.removeEventListener("touchcancel", this.onTouchEnd);
   }
   private onTouchStart = (e: TouchEvent) => {
-    if (e.touches.length === 2) this.pinchStart = { dist: touchDist(e.touches), bs: this.currentBarSpacing() };
+    if (e.touches.length !== 2) return;
+    const rect = this.container.getBoundingClientRect();
+    const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2 - rect.left;
+    const logical = this.chart.timeScale().coordinateToLogical(midX);
+    this.pinchStart = { dist: touchDist(e.touches), bs: this.currentBarSpacing(), midX, logical: logical ?? (0 as Logical) };
   };
   private onTouchMove = (e: TouchEvent) => {
     if (!this.pinchStart || e.touches.length !== 2) return;
     e.preventDefault();
-    // Amplify the finger-distance ratio so a small pinch zooms a lot more than
+    // Amplify the finger-distance ratio so a small pinch zooms much more than
     // the library's 1:1 default — far fewer finger movements to zoom.
-    const AMP = 1.8;
+    const AMP = 1.6;
     const ratio = touchDist(e.touches) / this.pinchStart.dist;
     const bs = Math.max(0.6, Math.min(80, this.pinchStart.bs * Math.pow(ratio, AMP)));
-    this.chart.timeScale().applyOptions({ barSpacing: bs });
+    const ts = this.chart.timeScale();
+    ts.applyOptions({ barSpacing: bs });
+    // Re-scroll so the bar under the fingers stays put — zoom toward the
+    // midpoint, not the right edge.
+    const newX = ts.logicalToCoordinate(this.pinchStart.logical);
+    if (newX != null) ts.scrollToPosition(ts.scrollPosition() + (newX - this.pinchStart.midX) / bs, false);
   };
   private onTouchEnd = (e: TouchEvent) => {
-    if (e.touches.length < 2) this.pinchStart = null;
+    if (e.touches.length < 2) {
+      if (this.pinchStart) this.cb.onZoomChange?.(this.currentBarSpacing()); // persist final zoom
+      this.pinchStart = null;
+    }
   };
 
   destroy() {

@@ -44,6 +44,7 @@ export function App() {
   // Desktop uses the persisted preference; mobile uses a local overlay toggle so
   // dismissing the sidebar on a phone doesn't change the desktop preference.
   const [mobileSidebar, setMobileSidebar] = useState(false);
+  const [mobileBarOpen, setMobileBarOpen] = useState(true);
   const sidebarOpen = mobile ? mobileSidebar : showSidebarPref;
   const openSidebar = () => (mobile ? setMobileSidebar(true) : useSettings.getState().set("showSidebar", true));
   const closeSidebar = () => (mobile ? setMobileSidebar(false) : useSettings.getState().set("showSidebar", false));
@@ -167,7 +168,8 @@ export function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <TopBar onShowShortcuts={() => setShowShortcuts(true)} onOpenJournal={() => setShowJournal(true)} />
+      {/* Desktop top bar; on mobile its essentials move into the bottom bar. */}
+      {!mobile && <TopBar onShowShortcuts={() => setShowShortcuts(true)} onOpenJournal={() => setShowJournal(true)} />}
       <MappingBar />
       {/* The status strip (signal/date/close/decision/nav) is desktop-only — on
           mobile those live in the bottom bar and scrubber, keeping the chart big. */}
@@ -189,7 +191,18 @@ export function App() {
         )}
       </div>
       <Scrubber />
-      <MobileActionBar />
+      {mobile &&
+        (mobileBarOpen ? (
+          <MobileActionBar onOpenJournal={() => setShowJournal(true)} onCollapse={() => setMobileBarOpen(false)} />
+        ) : (
+          <button
+            className="flex items-center justify-center border-t border-line bg-panel py-0.5 text-muted active:text-ink"
+            title="Show controls"
+            onClick={() => setMobileBarOpen(true)}
+          >
+            ⌃
+          </button>
+        ))}
       {showShortcuts && <ShortcutsOverlay onClose={() => setShowShortcuts(false)} />}
       <JournalDrawer open={showJournal} onClose={() => setShowJournal(false)} />
       <Toast />
