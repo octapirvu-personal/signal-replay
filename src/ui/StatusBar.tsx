@@ -1,9 +1,11 @@
 import { useApp } from "../state/app";
+import { useSettings } from "../state/settings";
 import { formatTime } from "../data/time";
-import { decide, nextSignal, prevSignal } from "../app/controls";
+import { decide, navForward, navBack } from "../app/controls";
 
 export function StatusBar() {
   const { signals, cur, reveal, bars, decisions } = useApp();
+  const stepMode = useSettings((s) => s.stepMode);
   const sg = signals[cur];
 
   if (!sg) {
@@ -59,10 +61,21 @@ export function StatusBar() {
       <button className="btn !border-sell !text-sell" onClick={() => decide("skip")}>
         ✗ Skip (K)
       </button>
-      <button className="btn" disabled={cur === 0} onClick={() => prevSignal()}>
-        ◀ Prev
+      <button
+        className={`btn ${stepMode ? "btn-active" : ""}`}
+        title="Step candle-by-candle (skips 00:00–07:30)"
+        onClick={() => useSettings.getState().set("stepMode", !stepMode)}
+      >
+        Step
       </button>
-      <button className="btn" disabled={cur === signals.length - 1} onClick={() => nextSignal()}>
+      <button className="btn" disabled={stepMode ? reveal <= 0 : cur === 0} onClick={() => navBack()}>
+        ◀ {stepMode ? "Back" : "Prev"}
+      </button>
+      <button
+        className="btn"
+        disabled={stepMode ? reveal >= bars.length - 1 - sg.barIndex : cur === signals.length - 1}
+        onClick={() => navForward()}
+      >
         Next ▶
       </button>
     </div>

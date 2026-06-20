@@ -19,8 +19,8 @@ import { useIsMobile } from "../ui/useIsMobile";
 import { restoreLastDataset } from "./dataset";
 import { tradeFromCurrentSignal, tradeAtFrontier } from "./drawingControls";
 import {
-  nextSignal,
-  prevSignal,
+  navForward,
+  navBack,
   revealMore,
   hideSome,
   stepForward,
@@ -122,11 +122,11 @@ export function App() {
       switch (e.key) {
         case "ArrowRight":
           e.preventDefault();
-          e.shiftKey ? stepForward() : nextSignal();
+          e.shiftKey ? stepForward() : navForward(); // plain arrow respects step/signal mode
           break;
         case "ArrowLeft":
           e.preventDefault();
-          e.shiftKey ? stepBack() : prevSignal();
+          e.shiftKey ? stepBack() : navBack();
           break;
         case "ArrowUp":
         case " ":
