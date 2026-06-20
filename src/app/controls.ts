@@ -102,6 +102,51 @@ export function stepBack() {
   hideSome(1);
 }
 
+// ---- candle-by-candle stepping (auto-skips the 00:00–07:30 dead zone) ----
+const SESSION_START_MIN = 7 * 60 + 30; // 07:30 UTC — candles from 00:00 up to here are skipped
+function inDeadZone(timeSec: number): boolean {
+  const d = new Date(timeSec * 1000);
+  return d.getUTCHours() * 60 + d.getUTCMinutes() < SESSION_START_MIN;
+}
+
+/** Reveal the next candle; if it lands in 00:00–07:30, jump past to 07:30. */
+export function stepForwardSkip() {
+  const app = useApp.getState();
+  const sg = app.signals[app.cur];
+  if (!sg) return;
+  const maxReveal = app.bars.length - 1 - sg.barIndex;
+  if (app.reveal >= maxReveal) return;
+  let reveal = app.reveal + 1;
+  while (reveal < maxReveal && inDeadZone(app.bars[sg.barIndex + reveal].time)) reveal++;
+  app.setReveal(reveal);
+  app.setFrontier(frontierFor(sg.barIndex, reveal));
+  persistPosition();
+  getEngine()?.goToFrontier(frontierFor(sg.barIndex, reveal), "stream");
+}
+
+/** Hide the last candle; skip back over the 00:00–07:30 dead zone. */
+export function stepBackSkip() {
+  const app = useApp.getState();
+  const sg = app.signals[app.cur];
+  if (!sg || app.reveal <= 0) return;
+  let reveal = app.reveal - 1;
+  while (reveal > 0 && inDeadZone(app.bars[sg.barIndex + reveal].time)) reveal--;
+  app.setReveal(reveal);
+  app.setFrontier(frontierFor(sg.barIndex, reveal));
+  persistPosition();
+  getEngine()?.goToFrontier(frontierFor(sg.barIndex, reveal), "animated");
+}
+
+/** Bottom-bar navigation: candle-step (dead-zone-aware) or jump to next signal. */
+export function navForward() {
+  if (useSettings.getState().stepMode) stepForwardSkip();
+  else nextSignal();
+}
+export function navBack() {
+  if (useSettings.getState().stepMode) stepBackSkip();
+  else prevSignal();
+}
+
 /** Record / toggle a take/skip decision for the current signal; persists to IndexedDB. */
 export function decide(kind: DecisionKind) {
   const app = useApp.getState();

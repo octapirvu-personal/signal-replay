@@ -36,6 +36,8 @@ export interface Settings {
   statHorizon: number;
   /** Show the right-hand sidebar (notes / signals / trades / performance). */
   showSidebar: boolean;
+  /** Bottom-bar nav steps candle-by-candle (skipping 00:00–07:30) instead of jumping to signals. */
+  stepMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -57,6 +59,7 @@ export const DEFAULT_SETTINGS: Settings = {
   pipValue: 10,
   statHorizon: 20,
   showSidebar: true,
+  stepMode: false,
 };
 
 interface SettingsStore extends Settings {
@@ -127,6 +130,7 @@ export function flushSettings(get: () => SettingsStore = useSettings.getState) {
     pipValue: s.pipValue,
     statHorizon: s.statHorizon,
     showSidebar: s.showSidebar,
+    stepMode: s.stepMode,
   };
   void kvSet(KV_KEY, snapshot);
 }
