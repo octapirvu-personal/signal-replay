@@ -195,5 +195,6 @@ export async function kvGet<T>(key: string): Promise<T | undefined> {
 }
 export async function kvSet(key: string, value: unknown) {
   const user_id = await requireUserId();
-  await supabase.from("kv").upsert({ user_id, key, value }, { onConflict: "user_id,key" });
+  const { error } = await supabase.from("kv").upsert({ user_id, key, value }, { onConflict: "user_id,key" });
+  if (error) throw new Error(`Couldn't save to the cloud: ${error.message}`);
 }

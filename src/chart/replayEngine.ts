@@ -96,7 +96,11 @@ export class ReplayEngine {
         lockVisibleTimeRangeOnResize: true,
       },
       crosshair: { mode: CrosshairMode.Normal },
+      // Disable the library's 1:1 pinch — we run a faster custom one below.
+      handleScale: { mouseWheel: true, pinch: false, axisPressedMouseMove: true },
     });
+
+    this.setupPinch();
 
     const bandOpts = { lineWidth: 1 as const, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
     this.upper = this.chart.addLineSeries({ color: "rgba(239,83,80,.55)", lineStyle: LineStyle.Solid, ...bandOpts });
@@ -423,8 +427,45 @@ export class ReplayEngine {
     return this.frontier;
   }
 
+  // ---------- faster two-finger pinch zoom (TradingView-like) ----------
+  private pinchStart: { dist: number; bs: number } | null = null;
+
+  private setupPinch() {
+    this.container.addEventListener("touchstart", this.onTouchStart, { passive: true });
+    this.container.addEventListener("touchmove", this.onTouchMove, { passive: false });
+    this.container.addEventListener("touchend", this.onTouchEnd);
+    this.container.addEventListener("touchcancel", this.onTouchEnd);
+  }
+  private teardownPinch() {
+    this.container.removeEventListener("touchstart", this.onTouchStart);
+    this.container.removeEventListener("touchmove", this.onTouchMove);
+    this.container.removeEventListener("touchend", this.onTouchEnd);
+    this.container.removeEventListener("touchcancel", this.onTouchEnd);
+  }
+  private onTouchStart = (e: TouchEvent) => {
+    if (e.touches.length === 2) this.pinchStart = { dist: touchDist(e.touches), bs: this.currentBarSpacing() };
+  };
+  private onTouchMove = (e: TouchEvent) => {
+    if (!this.pinchStart || e.touches.length !== 2) return;
+    e.preventDefault();
+    // Amplify the finger-distance ratio so a small pinch zooms a lot more than
+    // the library's 1:1 default — far fewer finger movements to zoom.
+    const AMP = 1.8;
+    const ratio = touchDist(e.touches) / this.pinchStart.dist;
+    const bs = Math.max(0.6, Math.min(80, this.pinchStart.bs * Math.pow(ratio, AMP)));
+    this.chart.timeScale().applyOptions({ barSpacing: bs });
+  };
+  private onTouchEnd = (e: TouchEvent) => {
+    if (e.touches.length < 2) this.pinchStart = null;
+  };
+
   destroy() {
     this.cancelAnim();
+    this.teardownPinch();
     this.chart.remove();
   }
+}
+
+function touchDist(t: TouchList): number {
+  return Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
 }

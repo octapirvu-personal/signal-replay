@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { DrawTool, Selection, Trendline } from "../drawings/types";
 import type { Trade } from "../backtest/trades";
 import { kvGet, kvSet } from "../persistence/db";
+import { useApp } from "./app";
 
 interface DrawingsStore {
   tool: DrawTool;
@@ -41,7 +42,7 @@ export const useDrawings = create<DrawingsStore>((set, get) => ({
 
   addTrendline: (t) => {
     set((s) => ({ trendlines: [...s.trendlines, t] }));
-    persist(get);
+    flushDrawings(); // save now, not on a debounce — a backgrounded tab can drop pending writes
   },
   updateTrendline: (id, patch) => {
     set((s) => ({ trendlines: s.trendlines.map((d) => (d.id === id ? { ...d, ...patch } : d)) }));
@@ -52,23 +53,23 @@ export const useDrawings = create<DrawingsStore>((set, get) => ({
       trendlines: s.trendlines.filter((d) => d.id !== id),
       selection: s.selection?.kind === "trendline" && s.selection.id === id ? null : s.selection,
     }));
-    persist(get);
+    flushDrawings();
   },
 
   addTrade: (t) => {
     set((s) => ({ trades: [...s.trades, t] }));
-    persist(get);
+    flushDrawings(); // persist the new position immediately so mobile can't lose it
   },
   updateTrade: (id, patch) => {
     set((s) => ({ trades: s.trades.map((d) => (d.id === id ? { ...d, ...patch } : d)) }));
-    persist(get);
+    persist(get); // dragging fires many updates — debounce these
   },
   removeTrade: (id) => {
     set((s) => ({
       trades: s.trades.filter((d) => d.id !== id),
       selection: s.selection?.kind === "trade" && s.selection.id === id ? null : s.selection,
     }));
-    persist(get);
+    flushDrawings();
   },
 
   deleteSelected: () => {
@@ -113,7 +114,9 @@ export function flushDrawings() {
   }
   const s = useDrawings.getState();
   if (!s.datasetId) return;
-  void kvSet(key(s.datasetId), { trendlines: s.trendlines, trades: s.trades });
+  kvSet(key(s.datasetId), { trendlines: s.trendlines, trades: s.trades }).catch((e) =>
+    useApp.getState().setNotice((e as Error).message),
+  );
 }
 
 // Persist immediately when the tab is hidden or the page is being unloaded

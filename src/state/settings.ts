@@ -52,7 +52,7 @@ export const DEFAULT_SETTINGS: Settings = {
   strategyId: "bb-reentry",
   strategyParams: { length: 20, mult: 2 },
   tradeRiskPct: 1,
-  tradeRR: 2,
+  tradeRR: 3,
   positionSize: 1,
   pipValue: 10,
   statHorizon: 20,
@@ -82,7 +82,15 @@ export const useSettings = create<SettingsStore>((set, get) => ({
   },
   async hydrate() {
     const stored = await kvGet<Partial<Settings>>(KV_KEY);
-    set({ ...DEFAULT_SETTINGS, ...(stored ?? {}), hydrated: true });
+    const merged = { ...DEFAULT_SETTINGS, ...(stored ?? {}) };
+    // one-time: lift the old 2:1 default reward:risk to the new 3:1 default for
+    // existing users (there was never UI to set 2 deliberately).
+    const rrBumped = await kvGet<boolean>("rrDefault3");
+    if (!rrBumped) {
+      if (merged.tradeRR === 2) merged.tradeRR = 3;
+      void kvSet("rrDefault3", true);
+    }
+    set({ ...merged, hydrated: true });
   },
 }));
 

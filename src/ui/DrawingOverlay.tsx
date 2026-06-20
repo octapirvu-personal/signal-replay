@@ -236,9 +236,15 @@ export function DrawingOverlay() {
     if (drag.kind === "trade" && (drag.part === "sl" || drag.part === "tp" || drag.part === "entry")) {
       setEditLevel({ id: drag.id, part: drag.part });
     }
-    // capture so we reliably get move/up/cancel even if the finger leaves the element
+    // capture so we reliably get move/up/cancel even if the finger leaves the
+    // element, and so we get notified the moment the gesture is interrupted.
     try {
-      (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+      const el = e.currentTarget as Element;
+      el.setPointerCapture?.(e.pointerId);
+      // lostpointercapture is the catch-all: it fires on finger-up AND on any
+      // interruption (second touch, element removed) — guaranteeing the drag
+      // ends and the chart never stays locked ("stuck") on mobile.
+      el.addEventListener("lostpointercapture", endObjDrag, { once: true });
     } catch {
       /* not all targets support capture */
     }
@@ -246,8 +252,7 @@ export function DrawingOverlay() {
     window.addEventListener("pointermove", onObjDragMove);
     window.addEventListener("pointerup", endObjDrag);
     // touch gestures fire pointercancel (not pointerup) when the browser takes
-    // over for scroll/zoom — without this the drag never ends and the chart
-    // stays locked ("stuck") until reload.
+    // over for scroll/zoom — without this the drag never ends.
     window.addEventListener("pointercancel", endObjDrag);
   };
   const onObjDragMove = (e: PointerEvent) => {
@@ -560,7 +565,9 @@ function TradeView(props: {
   const pips1 = (v: number) => (Math.trunc(v * 10) / 10).toFixed(1);
 
   const dragging = editLevel != null;
-  const showHandles = (hovered || selected || dragging) && !preview;
+  // On touch the dots stay visible (no hover, and the user wants them always
+  // reachable); on desktop they appear on hover/selection.
+  const showHandles = !preview && (touch || hovered || selected || dragging);
   // Info chips show on hover (desktop) or selection (touch has no hover), and
   // live while drafting — but never mid-drag, and never just sitting there.
   const showInfo = (hovered || (touch && selected) || preview) && !dragging;
@@ -570,11 +577,8 @@ function TradeView(props: {
   const levelPrice = editLevel === "sl" ? trade.sl : editLevel === "tp" ? trade.tp : editLevel === "entry" ? trade.entryPrice : null;
   const levelColor = editLevel === "sl" ? SHORT_COLOR : editLevel === "tp" ? LONG_COLOR : color;
 
-  const cx = (xe + xRight) / 2; // chips centre over the box
-  const outside = (y: number) => y + (y >= ye ? 19 : -19); // push the chip just beyond its level
-
   const hitR = touch ? 26 : 15;
-  const dotR = touch ? 7.5 : 5.5;
+  const dotR = touch ? 9 : 6.6; // 20% larger than before
   const handle = (part: "entry" | "sl" | "tp", cy: number, fill: string) => (
     <g style={{ pointerEvents: "all", cursor: "ns-resize", touchAction: "none" }} onPointerDown={(e) => props.onHandle(part, e)}>
       {/* generous invisible hit area so the dot is easy to grab (esp. touch) */}
@@ -625,14 +629,19 @@ function TradeView(props: {
         </>
       )}
 
-      {/* TradingView-style info, only while hovering: stop / risk-reward / target */}
-      {showInfo && (
-        <>
-          <CenterChip cx={cx} cy={outside(ysl)} fill={SHORT_COLOR} textColor="#ffffff" text={`Stop: ${trade.sl.toFixed(precision)}   ${pips1(slPips)}`} />
-          <CenterChip cx={cx} cy={ye} fill="#ffffff" stroke={SHORT_COLOR} textColor="#0e1116" text={`Risk/reward ratio: ${rr.toFixed(2)}`} />
-          <CenterChip cx={cx} cy={outside(ytp)} fill={LONG_COLOR} textColor="#ffffff" text={`Target: ${trade.tp.toFixed(precision)}   ${pips1(tpPips)}`} />
-        </>
-      )}
+      {/* Info chips — anchored just right of the dot column so they never cover
+          the entry/SL/TP buttons. Each sits on its own level line. */}
+      {showInfo &&
+        (() => {
+          const xLabel = xe + dotR + 14;
+          return (
+            <>
+              <InfoChip x={xLabel} cy={ysl} fill={SHORT_COLOR} textColor="#ffffff" text={`Stop: ${trade.sl.toFixed(precision)}   ${pips1(slPips)}`} />
+              <InfoChip x={xLabel} cy={ye} fill="#ffffff" stroke={SHORT_COLOR} textColor="#0e1116" text={`Risk/reward ratio: ${rr.toFixed(2)}`} />
+              <InfoChip x={xLabel} cy={ytp} fill={LONG_COLOR} textColor="#ffffff" text={`Target: ${trade.tp.toFixed(precision)}   ${pips1(tpPips)}`} />
+            </>
+          );
+        })()}
 
       {/* dragging a level: full-width dotted line + the live price on the Y axis */}
       {dragging && levelY != null && (
@@ -647,14 +656,14 @@ function TradeView(props: {
   );
 }
 
-/** A centered, pill-shaped info chip (stop / risk-reward / target), TradingView-style. */
-function CenterChip({ cx, cy, fill, stroke, textColor, text }: { cx: number; cy: number; fill: string; stroke?: string; textColor: string; text: string }) {
+/** A left-anchored, pill-shaped info chip (stop / risk-reward / target). */
+function InfoChip({ x, cy, fill, stroke, textColor, text }: { x: number; cy: number; fill: string; stroke?: string; textColor: string; text: string }) {
   const w = text.length * 6.3 + 18;
   const h = 19;
   return (
     <g style={{ pointerEvents: "none" }}>
-      <rect x={cx - w / 2} y={cy - h / 2} width={w} height={h} rx={5} fill={fill} stroke={stroke ?? "none"} strokeWidth={stroke ? 1.5 : 0} opacity={0.96} />
-      <text x={cx} y={cy + 3.6} textAnchor="middle" fontSize={11} fontWeight={700} fill={textColor}>
+      <rect x={x} y={cy - h / 2} width={w} height={h} rx={5} fill={fill} stroke={stroke ?? "none"} strokeWidth={stroke ? 1.5 : 0} opacity={0.96} />
+      <text x={x + 9} y={cy + 3.6} textAnchor="start" fontSize={11} fontWeight={700} fill={textColor}>
         {text}
       </text>
     </g>
