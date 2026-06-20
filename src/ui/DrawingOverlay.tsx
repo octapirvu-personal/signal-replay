@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import type { Logical } from "lightweight-charts";
 import { getEngine } from "../chart/engineRef";
 import { useApp } from "../state/app";
@@ -34,6 +35,16 @@ export function DrawingOverlay() {
   const svgRef = useRef<SVGSVGElement>(null);
   const [, setVersion] = useState(0);
   const bump = () => setVersion((v) => (v + 1) % 1_000_000);
+  // Render synchronously so drawings stay glued to the chart while panning /
+  // zooming — a normal (deferred) React render trails a frame behind the
+  // canvas and the drawings look jiggly / lagging during fast scrolls.
+  const syncBump = () => {
+    try {
+      flushSync(bump);
+    } catch {
+      bump();
+    }
+  };
 
   const bars = useApp((s) => s.bars);
   const precision = useApp((s) => s.pricePrecision);
@@ -86,8 +97,8 @@ export function DrawingOverlay() {
   useEffect(() => {
     if (!chart) return;
     const ts = chart.timeScale();
-    ts.subscribeVisibleLogicalRangeChange(bump);
-    chart.subscribeCrosshairMove(bump);
+    ts.subscribeVisibleLogicalRangeChange(syncBump);
+    chart.subscribeCrosshairMove(syncBump);
     // Clicking empty chart space (anything not on a drawing) clears the
     // selection — TradingView-style — so the handles/toolbar disappear. Clicks
     // that land on a drawing are swallowed by the overlay and never reach the
@@ -97,11 +108,11 @@ export function DrawingOverlay() {
       if (d.tool === "cursor" && d.selection) d.select(null);
     };
     chart.subscribeClick(onChartClick);
-    const ro = new ResizeObserver(bump);
+    const ro = new ResizeObserver(syncBump);
     if (svgRef.current?.parentElement) ro.observe(svgRef.current.parentElement);
     return () => {
-      ts.unsubscribeVisibleLogicalRangeChange(bump);
-      chart.unsubscribeCrosshairMove(bump);
+      ts.unsubscribeVisibleLogicalRangeChange(syncBump);
+      chart.unsubscribeCrosshairMove(syncBump);
       chart.unsubscribeClick(onChartClick);
       ro.disconnect();
     };
