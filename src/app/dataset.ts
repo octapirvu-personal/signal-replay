@@ -75,7 +75,9 @@ export async function applyParseResult(name: string, res: ParseResult) {
     hasCsvSignals: res.hasCsvSignals,
     createdAt: Date.now(),
   };
-  void saveDataset(stored);
+  // Save to the cloud in the background, but surface failures (don't swallow):
+  // large datasets used to fail silently before they were compressed.
+  saveDataset(stored).catch((e) => useApp.getState().setNotice((e as Error).message));
   void kvSet("lastDataset", id);
 
   // resume decisions + drawings/trades for this dataset

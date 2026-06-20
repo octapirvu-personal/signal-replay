@@ -10,6 +10,7 @@ import { formatTime } from "../data/time";
 import type { Anchor, Trendline } from "../drawings/types";
 import { LONG_COLOR, SHORT_COLOR, DEFAULT_LINE_COLOR } from "../drawings/types";
 import { makeTradeId, makeTrendlineId, tradeContext } from "../app/drawingControls";
+import { useIsTouch } from "./useIsMobile";
 
 const HANDLE_R = 4.5;
 const FWD_PX = 200; // forward extent of an open trade box
@@ -57,6 +58,8 @@ export function DrawingOverlay() {
   const [editLevel, setEditLevel] = useState<{ id: string; part: "sl" | "tp" | "entry" } | null>(null);
   // Trade currently under the cursor — reveals its drag dots + info chips.
   const [hoverId, setHoverId] = useState<string | null>(null);
+
+  const touch = useIsTouch();
 
   const engine = getEngine();
   const chart = engine?.getChart();
@@ -220,16 +223,32 @@ export function DrawingOverlay() {
   };
 
   // ---------- dragging existing objects (cursor tool) ----------
+  const detachDrag = () => {
+    window.removeEventListener("pointermove", onObjDragMove);
+    window.removeEventListener("pointerup", endObjDrag);
+    window.removeEventListener("pointercancel", endObjDrag);
+  };
   const startObjDrag = (e: React.PointerEvent, drag: NonNullable<DragState>) => {
     e.stopPropagation();
     e.preventDefault();
+    detachDrag(); // clear any dangling drag (e.g. a prior touch that never got pointerup)
     dragRef.current = drag;
     if (drag.kind === "trade" && (drag.part === "sl" || drag.part === "tp" || drag.part === "entry")) {
       setEditLevel({ id: drag.id, part: drag.part });
     }
+    // capture so we reliably get move/up/cancel even if the finger leaves the element
+    try {
+      (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    } catch {
+      /* not all targets support capture */
+    }
     chart.applyOptions({ handleScroll: false, handleScale: false });
     window.addEventListener("pointermove", onObjDragMove);
     window.addEventListener("pointerup", endObjDrag);
+    // touch gestures fire pointercancel (not pointerup) when the browser takes
+    // over for scroll/zoom — without this the drag never ends and the chart
+    // stays locked ("stuck") until reload.
+    window.addEventListener("pointercancel", endObjDrag);
   };
   const onObjDragMove = (e: PointerEvent) => {
     const d = dragRef.current;
@@ -260,8 +279,7 @@ export function DrawingOverlay() {
     dragRef.current = null;
     setEditLevel(null);
     chart.applyOptions({ handleScroll: tool === "cursor", handleScale: tool === "cursor" });
-    window.removeEventListener("pointermove", onObjDragMove);
-    window.removeEventListener("pointerup", endObjDrag);
+    detachDrag();
   };
 
   const interactive = tool !== "cursor";
@@ -346,6 +364,7 @@ export function DrawingOverlay() {
           pipSize={t.pipSize ?? pipSizeFor(precision)}
           selected={selection?.kind === "trade" && selection.id === t.id}
           hovered={hoverId === t.id}
+          touch={touch}
           editLevel={editLevel?.id === t.id ? editLevel.part : null}
           chartW={svgW}
           paneW={paneW}
@@ -382,6 +401,7 @@ export function DrawingOverlay() {
           pipSize={draftTrade.pipSize ?? pipSizeFor(precision)}
           selected
           hovered={false}
+          touch={touch}
           editLevel={null}
           chartW={svgW}
           paneW={paneW}
@@ -514,6 +534,8 @@ function TradeView(props: {
   selected: boolean;
   /** Pointer is over the drawing — reveals the drag dots and the info chips. */
   hovered: boolean;
+  /** Touch device — enlarge hit targets and treat selection as the reveal trigger. */
+  touch: boolean;
   /** Level currently being dragged — draws a full-width line + a live Y-axis price tag. */
   editLevel: "sl" | "tp" | "entry" | null;
   /** Overlay width (right edge) for the full-chart-width editing line. */
@@ -525,7 +547,7 @@ function TradeView(props: {
   onHandle: (part: "entry" | "sl" | "tp", e: React.PointerEvent) => void;
   onHover: (hovering: boolean) => void;
 }) {
-  const { trade, xe, xRight, ye, ysl, ytp, precision, pipSize, selected, hovered, editLevel, chartW, paneW, preview } = props;
+  const { trade, xe, xRight, ye, ysl, ytp, precision, pipSize, selected, hovered, touch, editLevel, chartW, paneW, preview } = props;
   if (xe == null || xRight == null || ye == null || ysl == null || ytp == null) return null;
 
   const color = trade.direction === "long" ? LONG_COLOR : SHORT_COLOR;
@@ -539,8 +561,9 @@ function TradeView(props: {
 
   const dragging = editLevel != null;
   const showHandles = (hovered || selected || dragging) && !preview;
-  // Info chips only on hover (or live while drafting); never just sitting there.
-  const showInfo = (hovered || preview) && !dragging;
+  // Info chips show on hover (desktop) or selection (touch has no hover), and
+  // live while drafting — but never mid-drag, and never just sitting there.
+  const showInfo = (hovered || (touch && selected) || preview) && !dragging;
 
   // The level being dragged → its y, price, and colour (for the line + axis tag).
   const levelY = editLevel === "sl" ? ysl : editLevel === "tp" ? ytp : editLevel === "entry" ? ye : null;
@@ -550,11 +573,13 @@ function TradeView(props: {
   const cx = (xe + xRight) / 2; // chips centre over the box
   const outside = (y: number) => y + (y >= ye ? 19 : -19); // push the chip just beyond its level
 
+  const hitR = touch ? 26 : 15;
+  const dotR = touch ? 7.5 : 5.5;
   const handle = (part: "entry" | "sl" | "tp", cy: number, fill: string) => (
-    <g style={{ pointerEvents: "all", cursor: "ns-resize" }} onPointerDown={(e) => props.onHandle(part, e)}>
+    <g style={{ pointerEvents: "all", cursor: "ns-resize", touchAction: "none" }} onPointerDown={(e) => props.onHandle(part, e)}>
       {/* generous invisible hit area so the dot is easy to grab (esp. touch) */}
-      <circle cx={xe} cy={cy} r={15} fill="transparent" />
-      <circle cx={xe} cy={cy} r={5.5} fill={fill} stroke="#0e1116" strokeWidth={1.5} />
+      <circle cx={xe} cy={cy} r={hitR} fill="transparent" />
+      <circle cx={xe} cy={cy} r={dotR} fill={fill} stroke="#0e1116" strokeWidth={1.5} />
     </g>
   );
 
@@ -568,10 +593,23 @@ function TradeView(props: {
       <rect x={xe} y={Math.min(ye, ytp)} width={w} height={Math.abs(ye - ytp)} fill={LONG_COLOR} opacity={0.13} style={{ pointerEvents: "none" }} />
       <rect x={xe} y={Math.min(ye, ysl)} width={w} height={Math.abs(ye - ysl)} fill={SHORT_COLOR} opacity={0.13} style={{ pointerEvents: "none" }} />
 
-      {/* body: hover + move target */}
-      {!preview && (
-        <rect x={xe} y={Math.min(ytp, ysl)} width={w} height={Math.abs(ytp - ysl)} fill="transparent" style={{ pointerEvents: "all", cursor: "move" }} onPointerDown={props.onSelectBody} />
-      )}
+      {/* body: hover + tap-to-select + move target. Padded on touch so a small
+          box is still easy to tap with a finger. */}
+      {!preview &&
+        (() => {
+          const pad = touch ? 16 : 0;
+          return (
+            <rect
+              x={xe - pad}
+              y={Math.min(ytp, ysl) - pad}
+              width={w + pad * 2}
+              height={Math.abs(ytp - ysl) + pad * 2}
+              fill="transparent"
+              style={{ pointerEvents: "all", cursor: "move", touchAction: "none" }}
+              onPointerDown={props.onSelectBody}
+            />
+          );
+        })()}
 
       {/* TP / entry / SL level lines (the drawing itself — always shown, no text) */}
       <line x1={xe} y1={ytp} x2={xRight} y2={ytp} stroke={LONG_COLOR} strokeWidth={1} strokeDasharray="5 4" style={{ pointerEvents: "none" }} />

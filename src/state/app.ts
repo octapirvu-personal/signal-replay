@@ -44,6 +44,9 @@ interface AppStore {
   // mapping bar
   mapping: MappingState | null;
 
+  // transient toast (e.g. a cloud-save failure)
+  notice: string | null;
+
   // actions
   loadDataset(p: {
     id: string;
@@ -61,6 +64,7 @@ interface AppStore {
   setDecision(signalTime: number, rec: DecisionRecord | null): void;
   hydrateDecisions(d: Record<number, DecisionRecord>): void;
   setMapping(m: MappingState | null): void;
+  setNotice(notice: string | null): void;
   reset(): void;
 }
 
@@ -80,6 +84,7 @@ export const useApp = create<AppStore>((set) => ({
   frontier: -1,
   decisions: {},
   mapping: null,
+  notice: null,
 
   loadDataset: (p) =>
     set({
@@ -107,6 +112,7 @@ export const useApp = create<AppStore>((set) => ({
     }),
   hydrateDecisions: (d) => set({ decisions: d }),
   setMapping: (m) => set({ mapping: m }),
+  setNotice: (notice) => set({ notice }),
   reset: () =>
     set({
       datasetId: null,

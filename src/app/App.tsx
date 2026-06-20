@@ -14,6 +14,7 @@ import { useDrawings } from "../state/drawings";
 import { useAuth } from "../state/auth";
 import { AuthGate } from "../ui/AuthGate";
 import { MobileActionBar } from "../ui/MobileActionBar";
+import { Toast } from "../ui/Toast";
 import { useIsMobile } from "../ui/useIsMobile";
 import { restoreLastDataset } from "./dataset";
 import { tradeFromCurrentSignal, tradeAtFrontier } from "./drawingControls";
@@ -191,6 +192,7 @@ export function App() {
       <MobileActionBar />
       {showShortcuts && <ShortcutsOverlay onClose={() => setShowShortcuts(false)} />}
       <JournalDrawer open={showJournal} onClose={() => setShowJournal(false)} />
+      <Toast />
     </div>
   );
 }
