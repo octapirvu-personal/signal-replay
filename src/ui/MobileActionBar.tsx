@@ -1,32 +1,31 @@
 import { useApp } from "../state/app";
-import { useSettings } from "../state/settings";
-import { nextSignal, prevSignal, revealMore, hideSome, decide } from "../app/controls";
+import { nextSignal, prevSignal } from "../app/controls";
 
 /**
- * Bottom action bar for touch devices — the core replay loop that's keyboard-only
- * on desktop (prev/next signal, reveal more/less, take/skip). Hidden on `md`+.
+ * Bottom navigation for touch devices: step backward / forward through signals
+ * (the same animated transition either way). Hidden on `md`+.
  */
 export function MobileActionBar() {
   const hasDataset = useApp((s) => s.datasetId != null);
-  const step = useSettings((s) => Math.max(1, s.revealStep));
+  const cur = useApp((s) => s.cur);
+  const count = useApp((s) => s.signals.length);
   if (!hasDataset) return null;
 
   return (
-    <div className="flex gap-1.5 border-t border-line bg-panel px-2 py-1.5 md:hidden">
-      <Btn onClick={prevSignal} label="◀ Sig" />
-      <Btn onClick={() => hideSome(step)} label="− Hide" />
-      <Btn onClick={() => revealMore(step)} label="+ Reveal" />
-      <Btn onClick={() => decide("skip")} label="Skip" tone="sell" />
-      <Btn onClick={() => decide("take")} label="Take" tone="buy" />
-      <Btn onClick={nextSignal} label="Sig ▶" />
+    <div className="flex gap-2 border-t border-line bg-panel px-3 py-2 md:hidden">
+      <Btn onClick={prevSignal} disabled={cur <= 0} label="◀ Back" />
+      <Btn onClick={nextSignal} disabled={cur >= count - 1} label="Forward ▶" />
     </div>
   );
 }
 
-function Btn({ onClick, label, tone }: { onClick: () => void; label: string; tone?: "buy" | "sell" }) {
-  const toneCls = tone === "buy" ? "border-buy/50 text-buy" : tone === "sell" ? "border-sell/50 text-sell" : "border-line text-ink";
+function Btn({ onClick, label, disabled }: { onClick: () => void; label: string; disabled: boolean }) {
   return (
-    <button className={`flex-1 rounded-md border bg-panel2 py-2 text-[13px] font-medium active:bg-accent active:text-white ${toneCls}`} onClick={onClick}>
+    <button
+      className="flex-1 rounded-md border border-line bg-panel2 py-2.5 text-sm font-medium text-ink active:bg-accent active:text-white disabled:opacity-40"
+      disabled={disabled}
+      onClick={onClick}
+    >
       {label}
     </button>
   );

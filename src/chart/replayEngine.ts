@@ -244,21 +244,54 @@ export class ReplayEngine {
         if (this.follow) this.scrollToAnchor(mode !== "instant");
       }
     } else {
-      // backward → rebuild with whitespace, restoring view to avoid a flash
-      const range = this.chart.timeScale().getVisibleLogicalRange();
-      const bs = this.currentBarSpacing();
-      this.frontier = t;
-      this.suppress(140);
-      this.candles.setData(this.buildCandles(t));
-      if (this.bands) {
-        this.upper.setData(this.buildLine(this.bands.upper, t));
-        this.basis.setData(this.buildLine(this.bands.basis, t));
-        this.lower.setData(this.buildLine(this.bands.lower, t));
+      // backward → stream candles back out, mirroring the forward animation;
+      // fall back to an instant rebuild when we can't animate.
+      const wantStream = this.animate && (mode === "stream" || mode === "animated") && !document.hidden;
+      if (wantStream) {
+        this.streamBackward(t);
+      } else {
+        const range = this.chart.timeScale().getVisibleLogicalRange();
+        const bs = this.currentBarSpacing();
+        this.applyBackward(t, bs, range);
+        if (this.follow) this.scrollToAnchor(mode !== "instant");
       }
-      this.refreshMarkers();
-      this.restoreView(bs, range);
-      if (this.follow) this.scrollToAnchor(mode !== "instant");
     }
+  }
+
+  /** Rebuild series for frontier `f` (used by both instant and streamed backward). */
+  private applyBackward(f: number, bs: number, range: LogicalRange | null) {
+    this.frontier = f;
+    this.suppress(140);
+    this.candles.setData(this.buildCandles(f));
+    if (this.bands) {
+      this.upper.setData(this.buildLine(this.bands.upper, f));
+      this.basis.setData(this.buildLine(this.bands.basis, f));
+      this.lower.setData(this.buildLine(this.bands.lower, f));
+    }
+    this.refreshMarkers();
+    if (this.follow) this.scrollToAnchor(false);
+    else this.restoreView(bs, range);
+  }
+
+  /** Stream candles back out from the current frontier to `target` over animMs. */
+  private streamBackward(target: number) {
+    const from = this.frontier;
+    const total = from - target;
+    const range0 = this.chart.timeScale().getVisibleLogicalRange();
+    const bs = this.currentBarSpacing();
+    const t0 = performance.now();
+    const ease = (x: number) => 1 - Math.pow(1 - x, 3);
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / this.animMs);
+      const want = from - Math.round(ease(p) * total);
+      if (want < this.frontier) this.applyBackward(want, bs, range0);
+      if (p < 1) this.rafId = requestAnimationFrame(step);
+      else {
+        this.rafId = null;
+        if (this.frontier > target) this.applyBackward(target, bs, range0);
+      }
+    };
+    this.rafId = requestAnimationFrame(step);
   }
 
   /** Stream candles in from the current frontier to `target` over animMs. */

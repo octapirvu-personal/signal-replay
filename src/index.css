@@ -18,6 +18,89 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ---- Svinafell brand intro (Splash.tsx) ---- */
+.svina-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 44%, #141b26 0%, #0e1116 68%);
+  animation: svina-overlay 2.7s ease forwards;
+}
+.svina-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+}
+.svina-mark {
+  animation: svina-mark 2.7s ease forwards;
+  filter: drop-shadow(0 0 16px rgba(59, 130, 246, 0.35));
+}
+.svina-word {
+  font-weight: 300;
+  font-size: 30px;
+  color: #e6edf3;
+  letter-spacing: 0.16em;
+  padding-left: 0.16em; /* recentre under the mark despite tracking */
+  animation: svina-word 2.7s ease forwards;
+}
+@keyframes svina-overlay {
+  0%,
+  82% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes svina-mark {
+  0% {
+    opacity: 0;
+    transform: scale(0.86);
+    filter: blur(7px) drop-shadow(0 0 16px rgba(59, 130, 246, 0.35));
+  }
+  24% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0) drop-shadow(0 0 16px rgba(59, 130, 246, 0.35));
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
+@keyframes svina-word {
+  0% {
+    opacity: 0;
+    letter-spacing: 0.4em;
+  }
+  30% {
+    opacity: 1;
+    letter-spacing: 0.18em;
+  }
+  70% {
+    opacity: 1;
+    letter-spacing: 0.17em;
+  }
+  100% {
+    opacity: 0;
+    letter-spacing: 0.15em;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .svina-splash,
+  .svina-mark,
+  .svina-word {
+    animation-duration: 1.6s;
+  }
+}
+
 @layer components {
   .btn {
     @apply rounded-md border border-line bg-panel2 px-3 py-1.5 text-[13px] text-ink transition-colors;

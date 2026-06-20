@@ -168,7 +168,9 @@ export function App() {
     <div className="flex h-full flex-col">
       <TopBar onShowShortcuts={() => setShowShortcuts(true)} onOpenJournal={() => setShowJournal(true)} />
       <MappingBar />
-      <StatusBar />
+      {/* The status strip (signal/date/close/decision/nav) is desktop-only — on
+          mobile those live in the bottom bar and scrubber, keeping the chart big. */}
+      {!mobile && <StatusBar />}
       <div className="relative flex min-h-0 flex-1">
         {hasDataset && <DrawToolbar />}
         <ChartPanel />
