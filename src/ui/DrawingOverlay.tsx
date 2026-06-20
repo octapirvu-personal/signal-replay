@@ -64,6 +64,9 @@ export function DrawingOverlay() {
   const downClient = useRef<{ x: number; y: number } | null>(null);
   const movedRef = useRef(false);
   const dragRef = useRef<DragState>(null);
+  // Detaches the window listeners of the CURRENT drag (stored so a manual reset
+  // can clean up even a drag whose pointerup never arrived).
+  const dragCleanupRef = useRef<(() => void) | null>(null);
   // Hit-test the current drawings at a pixel point — kept in a ref so the
   // (stable) chart-click handler always sees fresh coordinates.
   const hitTestRef = useRef<(x: number, y: number) => Selection>(() => null);
@@ -139,6 +142,23 @@ export function DrawingOverlay() {
   useEffect(() => {
     if (tool === "cursor") setDraft(null);
   }, [tool]);
+
+  // Manual "deselect / unstick" escape hatch (a button dispatches this): clear
+  // any selection and forcibly end a stuck drag so the chart pans again.
+  useEffect(() => {
+    const onReset = () => {
+      dragRef.current = null;
+      setEditLevel(null);
+      dragCleanupRef.current?.();
+      dragCleanupRef.current = null;
+      getEngine()?.getChart()?.applyOptions({ handleScroll: true, handleScale: true });
+      const d = useDrawings.getState();
+      d.setTool("cursor");
+      d.select(null);
+    };
+    window.addEventListener("reset-draw", onReset);
+    return () => window.removeEventListener("reset-draw", onReset);
+  }, []);
 
   if (!chart || !series) return null;
   const ts = chart.timeScale();
@@ -310,6 +330,7 @@ export function DrawingOverlay() {
     // touch gestures fire pointercancel (not pointerup) when the browser takes
     // over for scroll/zoom — without this the drag never ends.
     window.addEventListener("pointercancel", endObjDrag);
+    dragCleanupRef.current = detachDrag; // matches the listeners just attached
   };
   const onObjDragMove = (e: PointerEvent) => {
     const d = dragRef.current;
@@ -341,6 +362,7 @@ export function DrawingOverlay() {
     setEditLevel(null);
     chart.applyOptions({ handleScroll: tool === "cursor", handleScale: tool === "cursor" });
     detachDrag();
+    dragCleanupRef.current = null;
   };
 
   const interactive = tool !== "cursor";

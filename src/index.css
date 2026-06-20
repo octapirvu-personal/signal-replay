@@ -11,6 +11,11 @@ body,
      navigation gesture while panning the chart. */
   overscroll-behavior-x: none;
 }
+/* Installed-app (home screen) mode: keep content clear of the Dynamic Island /
+   notch. The bottom inset is handled by the mobile bar itself. */
+#root {
+  padding-top: env(safe-area-inset-top);
+}
 body {
   background: #0e1116;
   color: #e6edf3;
