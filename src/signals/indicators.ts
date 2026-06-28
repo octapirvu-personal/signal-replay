@@ -48,7 +48,7 @@ export function buildOverlays(bars: Bar[], bands: Bands | null, prefs: Indicator
   }
   if (prefs.showEma) {
     const close = bars.map((b) => b.close);
-    for (const s of EMA_SPECS) out.push({ id: s.id, color: s.color, values: ema(close, s.period), lineWidth: 2 });
+    for (const s of EMA_SPECS) out.push({ id: s.id, color: s.color, values: ema(close, s.period), lineWidth: 0.5 });
   }
   return out;
 }

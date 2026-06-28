@@ -53,13 +53,16 @@ export type NavMode = "instant" | "animated" | "stream";
 export class ReplayEngine {
   private chart: IChartApi;
   private candles: ISeriesApi<"Candlestick">;
-  // Indicator overlay lines (Bollinger Bands, EMAs, …) — created/destroyed
-  // dynamically as the user toggles indicators.
-  private overlays: { def: OverlayLine; series: ISeriesApi<"Line"> }[] = [];
+  // Indicator overlay lines (Bollinger Bands, EMAs, …). A fixed pool created
+  // BEFORE the candle series so the lines render behind the candles; toggling
+  // indicators just rebinds/hides pool members.
+  private overlayPool: ISeriesApi<"Line">[] = [];
+  private overlayDefs: OverlayLine[] = [];
 
   private bars: Bar[] = [];
   private signals: Signal[] = [];
   private frontier = -1; // index of last revealed real bar
+  private showMarkers = true; // signal arrows follow the Bollinger Bands toggle
   private follow = true;
   private anchor = 0.75;
   private animMs = 420;
@@ -100,6 +103,18 @@ export class ReplayEngine {
     });
 
     this.setupPinch();
+
+    // Overlay pool — added before the candles so indicator lines sit behind them.
+    this.overlayPool = Array.from({ length: 8 }, () =>
+      this.chart.addLineSeries({
+        lineWidth: 1,
+        lineStyle: LineStyle.Solid,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+        visible: false,
+      }),
+    );
 
     this.candles = this.chart.addCandlestickSeries({
       upColor: "#26a69a",
@@ -142,22 +157,26 @@ export class ReplayEngine {
     this.suppress();
     this.chart.applyOptions({ timeScale: { barSpacing: bs } });
   }
-  /** Replace the indicator overlay lines (recreates the line series). */
+  /** Bind the indicator overlay lines onto the (behind-candles) pool. */
   setOverlays(defs: OverlayLine[]) {
-    for (const o of this.overlays) this.chart.removeSeries(o.series);
-    this.overlays = defs.map((def) => {
-      const series = this.chart.addLineSeries({
-        color: def.color,
-        lineWidth: (def.lineWidth ?? 1) as 1 | 2 | 3 | 4,
-        lineStyle: LineStyle.Solid,
-        priceLineVisible: false,
-        lastValueVisible: false,
-        crosshairMarkerVisible: false,
-        priceFormat: this.priceFormat(),
-      });
-      series.setData(this.buildLine(def.values, this.frontier));
-      return { def, series };
+    this.overlayDefs = defs.slice(0, this.overlayPool.length);
+    this.overlayPool.forEach((series, i) => {
+      const def = this.overlayDefs[i];
+      if (def) {
+        series.applyOptions({ color: def.color, lineWidth: (def.lineWidth ?? 1) as 1 | 2 | 3 | 4, visible: true, priceFormat: this.priceFormat() });
+        series.setData(this.buildLine(def.values, this.frontier));
+      } else {
+        series.applyOptions({ visible: false });
+        series.setData([]);
+      }
     });
+  }
+
+  /** Toggle the buy/sell signal arrows (kept in step with the Bollinger Bands). */
+  setShowMarkers(show: boolean) {
+    if (show === this.showMarkers) return;
+    this.showMarkers = show;
+    this.refreshMarkers();
   }
 
   private priceFormat() {
@@ -179,7 +198,7 @@ export class ReplayEngine {
     this.precision = precision;
     const priceFormat = this.priceFormat();
     this.candles.applyOptions({ priceFormat });
-    for (const o of this.overlays) o.series.applyOptions({ priceFormat });
+    for (const s of this.overlayPool) s.applyOptions({ priceFormat });
   }
 
   // ---------- loading ----------
@@ -259,7 +278,7 @@ export class ReplayEngine {
     this.frontier = f;
     this.suppress(140);
     this.candles.setData(this.buildCandles(f));
-    for (const o of this.overlays) o.series.setData(this.buildLine(o.def.values, f));
+    this.overlayDefs.forEach((def, i) => this.overlayPool[i].setData(this.buildLine(def.values, f)));
     this.refreshMarkers();
     if (this.follow) this.scrollToAnchor(false);
     else this.restoreView(bs, range);
@@ -319,7 +338,7 @@ export class ReplayEngine {
   private revealRange(from: number, to: number) {
     for (let i = from; i <= to; i++) {
       this.candles.update(this.realCandle(i));
-      for (const o of this.overlays) o.series.update(this.lineAt(o.def.values, i));
+      this.overlayDefs.forEach((def, j) => this.overlayPool[j].update(this.lineAt(def.values, i)));
     }
   }
 
@@ -387,6 +406,10 @@ export class ReplayEngine {
   }
 
   private refreshMarkers() {
+    if (!this.showMarkers) {
+      this.candles.setMarkers([]);
+      return;
+    }
     const markers: SeriesMarker<Time>[] = [];
     for (const s of this.signals) {
       if (s.barIndex > this.frontier) break; // signals are sorted ascending

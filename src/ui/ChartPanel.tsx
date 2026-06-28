@@ -30,6 +30,7 @@ export function ChartPanel() {
     setEngine(engine);
     setReady(true);
 
+    engine.setShowMarkers(s.showBands);
     const app = useApp.getState();
     if (app.bars.length) {
       const frontier = app.signals[app.cur]?.barIndex ?? app.bars.length - 1;
@@ -53,10 +54,14 @@ export function ChartPanel() {
   useEffect(() => void getEngine()?.setFollow(follow), [follow]);
   useEffect(() => void getEngine()?.setAnchor(anchor), [anchor]);
   useEffect(() => void getEngine()?.setAnimate(animate, animMs), [animate, animMs]);
-  // Rebuild the indicator overlays whenever an indicator toggle changes.
+  // Rebuild the indicator overlays whenever an indicator toggle changes; the
+  // buy/sell signal arrows follow the Bollinger Bands toggle.
   useEffect(() => {
+    const e = getEngine();
+    if (!e) return;
     const app = useApp.getState();
-    getEngine()?.setOverlays(buildOverlays(app.bars, app.bands, { showBands, showEma }));
+    e.setOverlays(buildOverlays(app.bars, app.bands, { showBands, showEma }));
+    e.setShowMarkers(showBands);
   }, [showBands, showEma]);
 
   async function handleFiles(files: FileList | null) {
