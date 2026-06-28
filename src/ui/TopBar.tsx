@@ -9,6 +9,7 @@ import { buildResultsCsv, downloadCsv } from "../backtest/results";
 import { useAuth } from "../state/auth";
 import { DatasetSwitcher } from "./DatasetSwitcher";
 import { IndicatorsMenu } from "./IndicatorsMenu";
+import { StrategySelect } from "./StrategySelect";
 
 export function TopBar({ onShowShortcuts, onOpenJournal }: { onShowShortcuts: () => void; onOpenJournal: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -33,6 +34,8 @@ export function TopBar({ onShowShortcuts, onOpenJournal }: { onShowShortcuts: ()
       <DatasetSwitcher />
 
       <div className="flex-1" />
+
+      <StrategySelect />
 
       <label className="fld">
         Signals

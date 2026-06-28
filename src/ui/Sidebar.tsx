@@ -7,6 +7,7 @@ import { gotoSignal, setNote, setRating } from "../app/controls";
 import { evaluateTrade } from "../backtest/trades";
 import { StatsPanel } from "./StatsPanel";
 import { IndicatorsMenu } from "./IndicatorsMenu";
+import { StrategySelect } from "./StrategySelect";
 
 const RATINGS = ["A", "B", "C"];
 
@@ -28,7 +29,8 @@ export function Sidebar({ onHide }: { onHide: () => void }) {
 
   return (
     <aside className="absolute inset-y-0 right-0 z-30 flex w-[86vw] max-w-[330px] flex-col border-l border-line bg-panel shadow-2xl md:static md:z-auto md:w-[300px] md:shadow-none">
-      <div className="flex items-center justify-between border-b border-line px-2 py-1">
+      <div className="flex items-center justify-between gap-2 border-b border-line px-2 py-1">
+        <StrategySelect />
         <IndicatorsMenu />
         <button className="text-muted hover:text-ink" title="Hide sidebar" onClick={onHide}>
           ›

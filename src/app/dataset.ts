@@ -7,6 +7,7 @@ import { useSettings } from "../state/settings";
 import { useDrawings } from "../state/drawings";
 import { computeSignals } from "../chart/computeSignals";
 import { buildOverlays } from "../signals/indicators";
+import { markersVisible } from "../signals/markers";
 import { getEngine } from "../chart/engineRef";
 import {
   saveDataset,
@@ -43,7 +44,7 @@ export function recomputeSignals(resetCursor = true) {
 
   const engine = getEngine();
   if (!engine) return;
-  engine.setShowMarkers(s.showBands);
+  engine.setShowMarkers(markersVisible(s.strategyId, s.showBands));
   const overlays = buildOverlays(app.bars, cs.bands, s);
   if (resetCursor) {
     const frontier = cs.active[0]?.barIndex ?? app.bars.length - 1;
@@ -116,7 +117,7 @@ export async function applyParseResult(name: string, res: ParseResult) {
     engine.setFollow(s.followFrontier);
     engine.setAnchor(s.anchor);
     engine.setAnimate(s.animate, s.animMs);
-    engine.setShowMarkers(s.showBands);
+    engine.setShowMarkers(markersVisible(s.strategyId, s.showBands));
     engine.load(res.bars, buildOverlays(res.bars, cs.bands, s), cs.active, frontier, s.barSpacing);
   }
 }

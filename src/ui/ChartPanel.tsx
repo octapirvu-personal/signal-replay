@@ -5,6 +5,7 @@ import { useApp } from "../state/app";
 import { useSettings } from "../state/settings";
 import { readFileAndLoad, loadSample } from "../app/fileLoad";
 import { buildOverlays } from "../signals/indicators";
+import { markersVisible } from "../signals/markers";
 import { DrawingOverlay } from "./DrawingOverlay";
 import { SelectionToolbar } from "./SelectionToolbar";
 
@@ -30,7 +31,7 @@ export function ChartPanel() {
     setEngine(engine);
     setReady(true);
 
-    engine.setShowMarkers(s.showBands);
+    engine.setShowMarkers(markersVisible(s.strategyId, s.showBands));
     const app = useApp.getState();
     if (app.bars.length) {
       const frontier = app.signals[app.cur]?.barIndex ?? app.bars.length - 1;
@@ -51,6 +52,7 @@ export function ChartPanel() {
   const animMs = useSettings((s) => s.animMs);
   const showBands = useSettings((s) => s.showBands);
   const showEma = useSettings((s) => s.showEma);
+  const strategyId = useSettings((s) => s.strategyId);
   useEffect(() => void getEngine()?.setFollow(follow), [follow]);
   useEffect(() => void getEngine()?.setAnchor(anchor), [anchor]);
   useEffect(() => void getEngine()?.setAnimate(animate, animMs), [animate, animMs]);
@@ -61,8 +63,8 @@ export function ChartPanel() {
     if (!e) return;
     const app = useApp.getState();
     e.setOverlays(buildOverlays(app.bars, app.bands, { showBands, showEma }));
-    e.setShowMarkers(showBands);
-  }, [showBands, showEma]);
+    e.setShowMarkers(markersVisible(strategyId, showBands));
+  }, [showBands, showEma, strategyId]);
 
   async function handleFiles(files: FileList | null) {
     if (!files || !files[0]) return;

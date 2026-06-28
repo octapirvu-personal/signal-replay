@@ -1,5 +1,6 @@
 import type { Bar } from "../data/types";
 import type { Bands, OverlayLine } from "./types";
+import { computeBands } from "./bbReentry";
 
 /** Available indicators the user can toggle. */
 export const INDICATORS = [
@@ -41,10 +42,13 @@ const EMA_SPECS = [
 /** Build the list of indicator overlay lines for the currently enabled indicators. */
 export function buildOverlays(bars: Bar[], bands: Bands | null, prefs: IndicatorPrefs): OverlayLine[] {
   const out: OverlayLine[] = [];
-  if (prefs.showBands && bands) {
-    out.push({ id: "bb-upper", color: "rgba(239,83,80,.6)", values: bands.upper });
-    out.push({ id: "bb-basis", color: "rgba(59,130,246,.6)", values: bands.basis });
-    out.push({ id: "bb-lower", color: "rgba(38,166,154,.6)", values: bands.lower });
+  if (prefs.showBands) {
+    // Use the strategy's bands when available (BB strategy), else a default 20/2
+    // so the bands still draw under non-BB strategies (e.g. Hammer).
+    const b = bands ?? computeBands(bars.map((x) => x.close), 20, 2);
+    out.push({ id: "bb-upper", color: "rgba(239,83,80,.6)", values: b.upper });
+    out.push({ id: "bb-basis", color: "rgba(59,130,246,.6)", values: b.basis });
+    out.push({ id: "bb-lower", color: "rgba(38,166,154,.6)", values: b.lower });
   }
   if (prefs.showEma) {
     const close = bars.map((b) => b.close);

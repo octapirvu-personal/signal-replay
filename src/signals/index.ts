@@ -1,12 +1,14 @@
 import { bbReEntryStrategy } from "./bbReentry";
+import { hammerStrategy } from "./hammer";
 import type { Strategy } from "./types";
 
 export * from "./types";
 export * from "./bbReentry";
+export * from "./hammer";
 export * from "./fileSignals";
 
 /** Registry of available strategies. Add new strategies here. */
-export const STRATEGIES: Strategy[] = [bbReEntryStrategy];
+export const STRATEGIES: Strategy[] = [bbReEntryStrategy, hammerStrategy];
 
 export function getStrategy(id: string): Strategy {
   return STRATEGIES.find((s) => s.id === id) ?? bbReEntryStrategy;
