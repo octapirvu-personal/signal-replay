@@ -102,14 +102,16 @@ export function stepBack() {
   hideSome(1);
 }
 
-// ---- candle-by-candle stepping (auto-skips the 00:00–07:30 dead zone) ----
-const SESSION_START_MIN = 7 * 60 + 30; // 07:30 UTC — candles from 00:00 up to here are skipped
+// ---- candle-by-candle stepping (auto-skips the 22:00–07:30 overnight zone) ----
+const DEAD_START_MIN = 22 * 60; // 22:00 UTC
+const SESSION_START_MIN = 7 * 60 + 30; // 07:30 UTC
 function inDeadZone(timeSec: number): boolean {
   const d = new Date(timeSec * 1000);
-  return d.getUTCHours() * 60 + d.getUTCMinutes() < SESSION_START_MIN;
+  const m = d.getUTCHours() * 60 + d.getUTCMinutes();
+  return m >= DEAD_START_MIN || m < SESSION_START_MIN; // wraps midnight
 }
 
-/** Reveal the next candle; if it lands in 00:00–07:30, jump past to 07:30. */
+/** Reveal the next candle; if it lands in 22:00–07:30, jump past to 07:30. */
 export function stepForwardSkip() {
   const app = useApp.getState();
   const sg = app.signals[app.cur];
@@ -124,7 +126,7 @@ export function stepForwardSkip() {
   getEngine()?.goToFrontier(frontierFor(sg.barIndex, reveal), "stream");
 }
 
-/** Hide the last candle; skip back over the 00:00–07:30 dead zone. */
+/** Hide the last candle; skip back over the 22:00–07:30 dead zone. */
 export function stepBackSkip() {
   const app = useApp.getState();
   const sg = app.signals[app.cur];

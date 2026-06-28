@@ -4,6 +4,7 @@ import { setEngine, getEngine } from "../chart/engineRef";
 import { useApp } from "../state/app";
 import { useSettings } from "../state/settings";
 import { readFileAndLoad, loadSample } from "../app/fileLoad";
+import { buildOverlays } from "../signals/indicators";
 import { DrawingOverlay } from "./DrawingOverlay";
 import { SelectionToolbar } from "./SelectionToolbar";
 
@@ -26,7 +27,6 @@ export function ChartPanel() {
     engine.setFollow(s.followFrontier);
     engine.setAnchor(s.anchor);
     engine.setAnimate(s.animate, s.animMs);
-    engine.setShowBands(s.showBands);
     setEngine(engine);
     setReady(true);
 
@@ -34,7 +34,7 @@ export function ChartPanel() {
     if (app.bars.length) {
       const frontier = app.signals[app.cur]?.barIndex ?? app.bars.length - 1;
       app.setFrontier(frontier + app.reveal);
-      engine.load(app.bars, app.bands, app.signals, frontier + app.reveal, s.barSpacing);
+      engine.load(app.bars, buildOverlays(app.bars, app.bands, s), app.signals, frontier + app.reveal, s.barSpacing);
     }
     return () => {
       engine.destroy();
@@ -49,10 +49,15 @@ export function ChartPanel() {
   const animate = useSettings((s) => s.animate);
   const animMs = useSettings((s) => s.animMs);
   const showBands = useSettings((s) => s.showBands);
+  const showEma = useSettings((s) => s.showEma);
   useEffect(() => void getEngine()?.setFollow(follow), [follow]);
   useEffect(() => void getEngine()?.setAnchor(anchor), [anchor]);
   useEffect(() => void getEngine()?.setAnimate(animate, animMs), [animate, animMs]);
-  useEffect(() => void getEngine()?.setShowBands(showBands), [showBands]);
+  // Rebuild the indicator overlays whenever an indicator toggle changes.
+  useEffect(() => {
+    const app = useApp.getState();
+    getEngine()?.setOverlays(buildOverlays(app.bars, app.bands, { showBands, showEma }));
+  }, [showBands, showEma]);
 
   async function handleFiles(files: FileList | null) {
     if (!files || !files[0]) return;

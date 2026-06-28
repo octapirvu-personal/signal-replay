@@ -8,6 +8,7 @@ import { setLookback } from "../app/controls";
 import { buildResultsCsv, downloadCsv } from "../backtest/results";
 import { useAuth } from "../state/auth";
 import { DatasetSwitcher } from "./DatasetSwitcher";
+import { IndicatorsMenu } from "./IndicatorsMenu";
 
 export function TopBar({ onShowShortcuts, onOpenJournal }: { onShowShortcuts: () => void; onOpenJournal: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
@@ -97,12 +98,7 @@ export function TopBar({ onShowShortcuts, onOpenJournal }: { onShowShortcuts: ()
       >
         Follow
       </button>
-      <button
-        className={`btn ${s.showBands ? "btn-active" : ""}`}
-        onClick={() => s.set("showBands", !s.showBands)}
-      >
-        Bands
-      </button>
+      <IndicatorsMenu />
       <button
         className={`btn ${s.animate ? "btn-active" : ""}`}
         title="Smooth streaming reveal"

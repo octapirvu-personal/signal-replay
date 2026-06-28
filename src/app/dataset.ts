@@ -6,6 +6,7 @@ import { useApp, type DecisionRecord } from "../state/app";
 import { useSettings } from "../state/settings";
 import { useDrawings } from "../state/drawings";
 import { computeSignals } from "../chart/computeSignals";
+import { buildOverlays } from "../signals/indicators";
 import { getEngine } from "../chart/engineRef";
 import {
   saveDataset,
@@ -42,13 +43,14 @@ export function recomputeSignals(resetCursor = true) {
 
   const engine = getEngine();
   if (!engine) return;
+  const overlays = buildOverlays(app.bars, cs.bands, s);
   if (resetCursor) {
     const frontier = cs.active[0]?.barIndex ?? app.bars.length - 1;
     useApp.getState().setFrontier(frontier);
-    engine.setSignalsAndBands(cs.active, cs.bands);
+    engine.setSignalsAndOverlays(cs.active, overlays);
     engine.goToFrontier(frontier, "instant");
   } else {
-    engine.setSignalsAndBands(cs.active, cs.bands);
+    engine.setSignalsAndOverlays(cs.active, overlays);
   }
 }
 
@@ -113,8 +115,7 @@ export async function applyParseResult(name: string, res: ParseResult) {
     engine.setFollow(s.followFrontier);
     engine.setAnchor(s.anchor);
     engine.setAnimate(s.animate, s.animMs);
-    engine.setShowBands(s.showBands);
-    engine.load(res.bars, cs.bands, cs.active, frontier, s.barSpacing);
+    engine.load(res.bars, buildOverlays(res.bars, cs.bands, s), cs.active, frontier, s.barSpacing);
   }
 }
 

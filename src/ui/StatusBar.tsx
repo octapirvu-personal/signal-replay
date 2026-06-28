@@ -63,7 +63,7 @@ export function StatusBar() {
       </button>
       <button
         className={`btn ${stepMode ? "btn-active" : ""}`}
-        title="Step candle-by-candle (skips 00:00–07:30)"
+        title="Step candle-by-candle (skips 22:00–07:30)"
         onClick={() => useSettings.getState().set("stepMode", !stepMode)}
       >
         Step

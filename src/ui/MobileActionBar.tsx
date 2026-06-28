@@ -28,11 +28,11 @@ export function MobileActionBar({ onOpenJournal, onCollapse }: { onOpenJournal: 
       <DatasetSwitcher compact />
       <Btn onClick={navBack} disabled={backDisabled} label="◀" wide />
       <Btn onClick={navForward} disabled={fwdDisabled} label="▶" wide />
-      {/* Toggle: candle-by-candle stepping (skips 00:00–07:30) vs jump-to-signal. */}
+      {/* Toggle: candle-by-candle stepping (skips 22:00–07:30) vs jump-to-signal. */}
       <Btn
         onClick={() => useSettings.getState().set("stepMode", !stepMode)}
         label="STEP"
-        title="Step candle-by-candle (skips 00:00–07:30)"
+        title="Step candle-by-candle (skips 22:00–07:30)"
         active={stepMode}
       />
       {/* Deselect / unstick: clears the selection and frees a stuck move tool. */}

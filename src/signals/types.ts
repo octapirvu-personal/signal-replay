@@ -16,6 +16,14 @@ export interface Bands {
   lower: number[];
 }
 
+/** One indicator line to overlay on the chart, aligned to the bar array (NaN = gap). */
+export interface OverlayLine {
+  id: string;
+  color: string;
+  values: number[];
+  lineWidth?: number;
+}
+
 export interface StrategyParam {
   key: string;
   label: string;

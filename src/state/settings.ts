@@ -19,8 +19,10 @@ export interface Settings {
   animMs: number;
   /** Snap drawing anchors to nearest O/H/L/C. */
   magnet: boolean;
-  /** Draw the strategy's indicator bands. */
+  /** Draw the strategy's Bollinger bands. */
   showBands: boolean;
+  /** Draw the Triple EMA (9 / 20 / 50) overlay. */
+  showEma: boolean;
   /** Signal source preference. */
   sigSource: "auto" | "file" | "compute";
   /** Strategy id + params. */
@@ -36,7 +38,7 @@ export interface Settings {
   statHorizon: number;
   /** Show the right-hand sidebar (notes / signals / trades / performance). */
   showSidebar: boolean;
-  /** Bottom-bar nav steps candle-by-candle (skipping 00:00–07:30) instead of jumping to signals. */
+  /** Bottom-bar nav steps candle-by-candle (skipping 22:00–07:30) instead of jumping to signals. */
   stepMode: boolean;
 }
 
@@ -50,6 +52,7 @@ export const DEFAULT_SETTINGS: Settings = {
   animMs: 420,
   magnet: false,
   showBands: true,
+  showEma: false,
   sigSource: "auto",
   strategyId: "bb-reentry",
   strategyParams: { length: 20, mult: 2 },
@@ -121,6 +124,7 @@ export function flushSettings(get: () => SettingsStore = useSettings.getState) {
     animMs: s.animMs,
     magnet: s.magnet,
     showBands: s.showBands,
+    showEma: s.showEma,
     sigSource: s.sigSource,
     strategyId: s.strategyId,
     strategyParams: s.strategyParams,

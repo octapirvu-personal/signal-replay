@@ -16,7 +16,7 @@ import {
 } from "lightweight-charts";
 import type { Bar } from "../data/types";
 import { detectPricePrecision, minMoveFor } from "../data/precision";
-import type { Bands, Signal } from "../signals/types";
+import type { OverlayLine, Signal } from "../signals/types";
 
 type CandlePoint = CandlestickData<Time> | WhitespaceData<Time>;
 type LinePoint = LineData<Time> | WhitespaceData<Time>;
@@ -53,15 +53,13 @@ export type NavMode = "instant" | "animated" | "stream";
 export class ReplayEngine {
   private chart: IChartApi;
   private candles: ISeriesApi<"Candlestick">;
-  private upper: ISeriesApi<"Line">;
-  private basis: ISeriesApi<"Line">;
-  private lower: ISeriesApi<"Line">;
+  // Indicator overlay lines (Bollinger Bands, EMAs, …) — created/destroyed
+  // dynamically as the user toggles indicators.
+  private overlays: { def: OverlayLine; series: ISeriesApi<"Line"> }[] = [];
 
   private bars: Bar[] = [];
-  private bands: Bands | null = null;
   private signals: Signal[] = [];
   private frontier = -1; // index of last revealed real bar
-  private showBands = true;
   private follow = true;
   private anchor = 0.75;
   private animMs = 420;
@@ -103,10 +101,6 @@ export class ReplayEngine {
 
     this.setupPinch();
 
-    const bandOpts = { lineWidth: 1 as const, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false };
-    this.upper = this.chart.addLineSeries({ color: "rgba(239,83,80,.55)", lineStyle: LineStyle.Solid, ...bandOpts });
-    this.basis = this.chart.addLineSeries({ color: "rgba(59,130,246,.55)", ...bandOpts });
-    this.lower = this.chart.addLineSeries({ color: "rgba(38,166,154,.55)", ...bandOpts });
     this.candles = this.chart.addCandlestickSeries({
       upColor: "#26a69a",
       downColor: "#ef5350",
@@ -148,13 +142,26 @@ export class ReplayEngine {
     this.suppress();
     this.chart.applyOptions({ timeScale: { barSpacing: bs } });
   }
-  setShowBands(show: boolean) {
-    if (show === this.showBands) return;
-    this.showBands = show;
-    const vis = show;
-    this.upper.applyOptions({ visible: vis });
-    this.basis.applyOptions({ visible: vis });
-    this.lower.applyOptions({ visible: vis });
+  /** Replace the indicator overlay lines (recreates the line series). */
+  setOverlays(defs: OverlayLine[]) {
+    for (const o of this.overlays) this.chart.removeSeries(o.series);
+    this.overlays = defs.map((def) => {
+      const series = this.chart.addLineSeries({
+        color: def.color,
+        lineWidth: (def.lineWidth ?? 1) as 1 | 2 | 3 | 4,
+        lineStyle: LineStyle.Solid,
+        priceLineVisible: false,
+        lastValueVisible: false,
+        crosshairMarkerVisible: false,
+        priceFormat: this.priceFormat(),
+      });
+      series.setData(this.buildLine(def.values, this.frontier));
+      return { def, series };
+    });
+  }
+
+  private priceFormat() {
+    return { type: "price" as const, precision: this.precision, minMove: minMoveFor(this.precision) };
   }
 
   getChart() {
@@ -170,34 +177,23 @@ export class ReplayEngine {
   /** Apply a price decimal precision to the axis, crosshair, and all series. */
   setPricePrecision(precision: number) {
     this.precision = precision;
-    const priceFormat = { type: "price" as const, precision, minMove: minMoveFor(precision) };
+    const priceFormat = this.priceFormat();
     this.candles.applyOptions({ priceFormat });
-    this.upper.applyOptions({ priceFormat });
-    this.basis.applyOptions({ priceFormat });
-    this.lower.applyOptions({ priceFormat });
+    for (const o of this.overlays) o.series.applyOptions({ priceFormat });
   }
 
   // ---------- loading ----------
   /** Load a dataset. Sets all bars once with the future whitespaced at `frontier`. */
-  load(bars: Bar[], bands: Bands | null, signals: Signal[], frontier: number, barSpacing: number) {
+  load(bars: Bar[], overlays: OverlayLine[], signals: Signal[], frontier: number, barSpacing: number) {
     this.cancelAnim();
     this.bars = bars;
-    this.bands = bands;
     this.signals = signals;
     this.frontier = Math.max(-1, Math.min(frontier, bars.length - 1));
 
     this.setPricePrecision(detectPricePrecision(bars));
     this.suppress(180);
     this.candles.setData(this.buildCandles(this.frontier));
-    if (bands) {
-      this.upper.setData(this.buildLine(bands.upper, this.frontier));
-      this.basis.setData(this.buildLine(bands.basis, this.frontier));
-      this.lower.setData(this.buildLine(bands.lower, this.frontier));
-    } else {
-      this.upper.setData([]);
-      this.basis.setData([]);
-      this.lower.setData([]);
-    }
+    this.setOverlays(overlays);
     this.refreshMarkers();
     // Pin the persisted zoom (setData can otherwise auto-fit).
     this.chart.applyOptions({ timeScale: { barSpacing } });
@@ -208,17 +204,12 @@ export class ReplayEngine {
     requestAnimationFrame(() => this.scrollToAnchor(false));
   }
 
-  /** Replace just the signals/bands (e.g. strategy params changed) without moving. */
-  setSignalsAndBands(signals: Signal[], bands: Bands | null) {
+  /** Replace signals + indicator overlays (e.g. strategy params or indicator toggles changed). */
+  setSignalsAndOverlays(signals: Signal[], overlays: OverlayLine[]) {
     this.signals = signals;
-    this.bands = bands;
     const range = this.chart.timeScale().getVisibleLogicalRange();
     const bs = this.currentBarSpacing();
-    if (bands) {
-      this.upper.setData(this.buildLine(bands.upper, this.frontier));
-      this.basis.setData(this.buildLine(bands.basis, this.frontier));
-      this.lower.setData(this.buildLine(bands.lower, this.frontier));
-    }
+    this.setOverlays(overlays);
     this.refreshMarkers();
     this.restoreView(bs, range);
   }
@@ -268,11 +259,7 @@ export class ReplayEngine {
     this.frontier = f;
     this.suppress(140);
     this.candles.setData(this.buildCandles(f));
-    if (this.bands) {
-      this.upper.setData(this.buildLine(this.bands.upper, f));
-      this.basis.setData(this.buildLine(this.bands.basis, f));
-      this.lower.setData(this.buildLine(this.bands.lower, f));
-    }
+    for (const o of this.overlays) o.series.setData(this.buildLine(o.def.values, f));
     this.refreshMarkers();
     if (this.follow) this.scrollToAnchor(false);
     else this.restoreView(bs, range);
@@ -332,11 +319,7 @@ export class ReplayEngine {
   private revealRange(from: number, to: number) {
     for (let i = from; i <= to; i++) {
       this.candles.update(this.realCandle(i));
-      if (this.bands) {
-        this.upper.update(this.lineAt(this.bands.upper, i));
-        this.basis.update(this.lineAt(this.bands.basis, i));
-        this.lower.update(this.lineAt(this.bands.lower, i));
-      }
+      for (const o of this.overlays) o.series.update(this.lineAt(o.def.values, i));
     }
   }
 
